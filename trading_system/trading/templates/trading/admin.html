@@ -128,10 +128,6 @@
             <strong>{{ active_limit_orders }}</strong>
           </div>
           <div class="snapshot-metric">
-            <span>Stop Orders Open</span>
-            <strong>{{ active_stoploss_orders }}</strong>
-          </div>
-          <div class="snapshot-metric">
             <span>Trades Today</span>
             <strong>{{ trades_today }}</strong>
           </div>
@@ -200,8 +196,8 @@
           <tbody>
             {% for t in recent_trades %}
             <tr>
-              <td style="padding:8px">{{ t.buyer.username }}</td>
-              <td style="padding:8px">{{ t.seller.username }}</td>
+              <td style="padding:8px">{{ t.buyer.user_id }}{% if t.buyer.name %} ({{ t.buyer.name }}){% endif %}</td>
+              <td style="padding:8px">{{ t.seller.user_id }}{% if t.seller.name %} ({{ t.seller.name }}){% endif %}</td>
               <td style="padding:8px">{{ t.price }}</td>
               <td style="padding:8px">{{ t.quantity }}</td>
               <td style="padding:8px">{{ t.timestamp|localtime|date:"Y-m-d H:i:s" }}</td>
@@ -216,38 +212,39 @@
   </div>
 </div>
 
-<!-- NEW PENDING STOP ORDERS TABLE -->
+<!-- PARTICIPANT POSITIONS REPORT -->
 <div class="row" style="margin-top:18px;">
   <div class="col">
     <div class="card">
-      <h3>Pending Stop Orders (System-Wide)</h3>
+      <h3>Participant Positions</h3>
+      <p class="small-note">Cash and inventory for every participant. Equity and P&amp;L are marked to the last traded price{% if mark_price %} (₹{{ mark_price|floatformat:2 }}){% endif %}. P&amp;L = change in cash + change in inventory × mark.</p>
       <div style="overflow:auto;">
         <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr>
-              <th style="text-align:left;padding:8px;color:var(--muted)">User</th>
+              <th style="text-align:left;padding:8px;color:var(--muted)">Roll</th>
+              <th style="text-align:left;padding:8px;color:var(--muted)">Name</th>
               <th style="text-align:left;padding:8px;color:var(--muted)">Role</th>
-              <th style="text-align:left;padding:8px;color:var(--muted)">Action</th>
-              <th style="text-align:left;padding:8px;color:var(--muted)">Trigger Price</th>
-              <th style="text-align:left;padding:8px;color:var(--muted)">Limit Price</th>
-              <th style="text-align:left;padding:8px;color:var(--muted)">Quantity (Disclosed)</th>
+              <th style="text-align:right;padding:8px;color:var(--muted)">Cash</th>
+              <th style="text-align:right;padding:8px;color:var(--muted)">Inventory</th>
+              <th style="text-align:right;padding:8px;color:var(--muted)">Equity</th>
+              <th style="text-align:right;padding:8px;color:var(--muted)">P&amp;L</th>
             </tr>
           </thead>
           <tbody>
-            {% for order in pending_stop_orders %}
+            {% for p in participants %}
             <tr>
-              <td style="padding:8px">{{ order.user.username }}</td>
-              <td style="padding:8px">{{ order.user_role }}</td>
-              <td style="padding:8px; font-weight:bold; color: {% if order.order_type == 'BUY' %}#28a745{% else %}#dc3545{% endif %};">
-                {{ order.order_type }}
-              </td>
-              <td style="padding:8px">₹{{ order.target_price }}</td>
-              <td style="padding:8px">{% if order.price %}₹{{ order.price }}{% else %}MARKET{% endif %}</td>
-              <td style="padding:8px">{{ order.quantity }} ({{ order.disclosed }})</td>
+              <td style="padding:8px">{{ p.user_id }}</td>
+              <td style="padding:8px">{{ p.name }}</td>
+              <td style="padding:8px">{{ p.role }}</td>
+              <td style="padding:8px; text-align:right;">₹{{ p.capital|floatformat:2 }}</td>
+              <td style="padding:8px; text-align:right;">{{ p.inventory }}</td>
+              <td style="padding:8px; text-align:right;">₹{{ p.equity|floatformat:2 }}</td>
+              <td style="padding:8px; text-align:right; font-weight:bold; color: {% if p.pnl >= 0 %}#28a745{% else %}#dc3545{% endif %};">₹{{ p.pnl|floatformat:2 }}</td>
             </tr>
             {% empty %}
             <tr>
-              <td colspan="6" style="padding:8px; text-align:center; color:var(--muted);">No pending stop orders in the system.</td>
+              <td colspan="7" style="padding:8px; text-align:center; color:var(--muted);">No participants found.</td>
             </tr>
             {% endfor %}
           </tbody>

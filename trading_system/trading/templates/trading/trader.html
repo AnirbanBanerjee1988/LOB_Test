@@ -81,25 +81,6 @@
           <small style="color: var(--muted); display: block; margin-top: 5px;">Must be at least 10% of Quantity.</small>
         </div>
 
-        <div class="form-group">
-          <label id="price-label">Estimated Price</label>
-          <input type="text" id="estimated_price" class="form-control" disabled value="Select Order Type">
-        </div>
-
-        <div class="form-group">
-          <label for="stoploss_order">Stop Order</label>
-          <input type="hidden" id="stoploss_order" name="Stoploss_order" value="NO">
-          <div class="yn-toggle" id="stoploss_order_toggle">
-            <button type="button" class="yn-option active" data-value="NO" onclick="setStopOrder('NO')">No</button>
-            <button type="button" class="yn-option" data-value="YES" onclick="setStopOrder('YES')">Yes</button>
-          </div>
-        </div>
-
-        <div class="form-group" id="target_price_group" style="display:none;">
-          <label for="target_price" style="color: var(--warning);">Trigger Price (Stop Order)</label>
-          <input type="number" step="0.01" id="target_price" name="Target_price" class="form-control" placeholder="Trigger Price">
-        </div>
-
         <button type="submit" class="btn" style="width: 100%;">Execute Market Order</button>
       </form>
   </div>
@@ -122,10 +103,6 @@
         <span>Spread</span>
         <strong id="pulse-spread">-</strong>
       </div>
-      <div class="market-metric">
-        <span>Est. Fill</span>
-        <strong id="pulse-est-fill">-</strong>
-      </div>
     </div>
     <div class="trader-chart-wrap">
       <canvas id="trader-price-chart"></canvas>
@@ -140,7 +117,7 @@
       </div>
       <div id="trader-book-ladder" style="max-height: 180px; overflow-y: auto; font-size: 0.78rem;"></div>
     </div>
-    <p class="market-note">Est. Fill follows your selected side and top-of-book availability.</p>
+    <p class="market-note">Best Bid / Best Ask reflect the current top of the limit order book.</p>
   </div>
 </div>
 
@@ -200,14 +177,17 @@ document.addEventListener('DOMContentLoaded', async function(){
           <tbody>
             {% for order in orders %}
             {% if order.quantity > 0 and not order.is_matched %}
-            <tr id="order-{{ order.id }}">
+            <tr id="order-{{ order.id }}"
+                data-qty="{{ order.quantity }}" data-disclosed="{{ order.disclosed }}"
+                data-price="{% if order.price is not None %}{{ order.price }}{% endif %}">
               <td style="color: {% if order.order_type == 'BUY' %}var(--success){% else %}var(--danger){% endif %}">
                 {{ order.order_type }}
               </td>
               <td>{{ order.quantity }}</td>
               <td>{{ order.disclosed }}</td>
               <td>Unmatched</td>
-              <td>
+              <td style="white-space:nowrap;">
+                <button class="btn" style="padding: 5px 10px; font-size: 0.8rem;" onclick="openModifyModal('{{ order.id }}')">Modify</button>
                 <button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;" onclick="cancelOrder('{{ order.id }}')">Cancel</button>
               </td>
             </tr>
@@ -223,49 +203,14 @@ document.addEventListener('DOMContentLoaded', async function(){
   </div>
   
   <div class="col">
-    <div class="card">
-      <h3 style="color: var(--warning);">Pending Stop Orders</h3>
-      <div class="table-responsive trader-table-wrap">
-        {% if stop_orders %}
-        <table class="table compact-table">
-          <thead>
-            <tr>
-              <th>Side</th>
-              <th>Qty</th>
-              <th>Trigger Price</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for order in stop_orders %}
-            <tr id="stoploss-{{ order.id }}">
-              <td style="color: {% if order.order_type == 'BUY' %}var(--success){% else %}var(--danger){% endif %}">
-                {{ order.order_type }}
-              </td>
-              <td>{{ order.quantity }}</td>
-              <td>{{ order.target_price }}</td>
-              <td>
-                <button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;" onclick="cancelStoploss('{{ order.id }}')">Cancel</button>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <p class="text-center" style="color: var(--muted); padding: 16px 0;">No pending stop orders.</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <div class="col">
     <div class="card mt-3">
-      <h3>Recent Trades</h3>
+      <h3>Your Recent Trades</h3>
       <div class="table-responsive trader-table-wrap">
         {% if trades %}
         <table class="table compact-table">
           <thead>
             <tr>
+              <th>Side</th>
               <th>Price</th>
               <th>Qty</th>
               <th>Time</th>
@@ -274,6 +219,7 @@ document.addEventListener('DOMContentLoaded', async function(){
           <tbody>
             {% for trade in trades %}
             <tr>
+              <td style="font-weight:700;color: {% if trade.side == 'BUY' %}var(--success){% else %}var(--danger){% endif %}">{{ trade.side }}</td>
               <td>{{ trade.price }}</td>
               <td>{{ trade.quantity }}</td>
               <td>{{ trade.timestamp|date:"H:i:s" }}</td>
@@ -288,6 +234,31 @@ document.addEventListener('DOMContentLoaded', async function(){
     </div>
   </div>
 </div>
+
+<!-- Modify order modal -->
+<div id="modify-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;z-index:50;">
+  <div class="card" style="max-width:360px;width:90%;">
+    <h3 style="margin-bottom:12px;">Modify Order</h3>
+    <input type="hidden" id="modify-order-id">
+    <div class="form-group">
+      <label>Quantity</label>
+      <input type="number" id="modify-qty" class="form-control" min="1" step="1">
+    </div>
+    <div class="form-group">
+      <label>Disclosed Quantity</label>
+      <input type="number" id="modify-disclosed" class="form-control" min="1" step="1">
+      <small style="color: var(--muted);">Must be at least 10% of Quantity.</small>
+    </div>
+    <div class="form-group" id="modify-price-group">
+      <label>Price</label>
+      <input type="number" id="modify-price" class="form-control" step="0.01" min="0.01">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="btn" style="flex:1;" onclick="submitModify()">Save</button>
+      <button class="btn" style="flex:1;background:transparent;border:1px solid rgba(255,255,255,0.15);" onclick="closeModifyModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -299,6 +270,7 @@ document.addEventListener('DOMContentLoaded', async function(){
     sellOrders: "{% url 'get_sell_orders' %}",
     trades: "{% url 'get_recent_trades' %}",
     cancel: "{% url 'cancel_order' %}",
+    modify: "{% url 'modify_my_order' %}",
   };
 
   const traderChartState = {
@@ -314,25 +286,6 @@ document.addEventListener('DOMContentLoaded', async function(){
   });
 
   disclosedInput.addEventListener('input', validateDisclosed);
-
-  function setStopOrder(value) {
-    document.getElementById('stoploss_order').value = value;
-    document.querySelectorAll('#stoploss_order_toggle .yn-option').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.value === value);
-    });
-    
-    const targetGroup = document.getElementById('target_price_group');
-    const targetInput = document.getElementById('target_price');
-    
-    if (value === 'YES') {
-      targetGroup.style.display = 'block';
-      targetInput.required = true;
-    } else {
-      targetGroup.style.display = 'none';
-      targetInput.required = false;
-      targetInput.value = '';
-    }
-  }
 
   function setupTraderChartInteractions() {
     const canvas = document.getElementById('trader-price-chart');
@@ -525,22 +478,7 @@ document.addEventListener('DOMContentLoaded', async function(){
         button.classList.toggle('active', button.dataset.value === value);
       });
     }
-    updatePriceEstimate();
-  }
-
-  function updatePriceEstimate() {
-    const type = document.getElementById('order_type').value;
-    const priceField = document.getElementById('estimated_price');
-    const url = type === 'BUY' ? TRADER_ENDPOINTS.bestAsk : TRADER_ENDPOINTS.bestBid;
-    priceField.value = "Fetching...";
-
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        const best = data[type === 'BUY' ? 'best_ask' : 'best_bid'];
-        priceField.value = (best && best.price) ? best.price : "Market Price (No pending orders)";
-        updateMarketPulse();
-      }).catch(err => { console.error(err); priceField.value = "Unavailable"; });
+    updateMarketPulse();
   }
 
   async function updateMarketPulse() {
@@ -555,13 +493,9 @@ document.addEventListener('DOMContentLoaded', async function(){
       const bid = bestBidData?.best_bid?.price != null ? parseFloat(bestBidData.best_bid.price) : NaN;
       const ask = bestAskData?.best_ask?.price != null ? parseFloat(bestAskData.best_ask.price) : NaN;
       const spread = (Number.isFinite(bid) && Number.isFinite(ask) && ask > bid) ? (ask - bid) : NaN;
-      const orderType = document.getElementById('order_type').value;
-      const estFill = orderType === 'BUY' ? ask : bid;
-
       document.getElementById('pulse-best-bid').textContent = Number.isFinite(bid) ? bid.toFixed(2) : '-';
       document.getElementById('pulse-best-ask').textContent = Number.isFinite(ask) ? ask.toFixed(2) : '-';
       document.getElementById('pulse-spread').textContent = Number.isFinite(spread) ? spread.toFixed(2) : '-';
-      document.getElementById('pulse-est-fill').textContent = Number.isFinite(estFill) ? estFill.toFixed(2) : '-';
 
       const series = (tradesData?.trades || []).slice(0, 30).map((trade) => {
         const price = parseFloat(trade.price);
@@ -595,25 +529,50 @@ document.addEventListener('DOMContentLoaded', async function(){
     }).catch(err => console.error(err));
   }
 
-  function cancelStoploss(orderId) {
-    if (!confirm("Are you sure you want to cancel this stop order?")) return;
-    fetch("{% url 'cancel_stoploss_order' %}", {
+  function openModifyModal(orderId) {
+    const row = document.getElementById('order-' + orderId);
+    if (!row) return;
+    document.getElementById('modify-order-id').value = orderId;
+    document.getElementById('modify-qty').value = row.dataset.qty || '';
+    document.getElementById('modify-disclosed').value = row.dataset.disclosed || '';
+    const priceGroup = document.getElementById('modify-price-group');
+    const priceInput = document.getElementById('modify-price');
+    if (row.dataset.price) {
+      priceInput.value = row.dataset.price;
+      priceGroup.style.display = 'block';
+    } else {
+      priceInput.value = '';
+      priceGroup.style.display = 'none';
+    }
+    document.getElementById('modify-modal').style.display = 'flex';
+  }
+
+  function closeModifyModal() {
+    document.getElementById('modify-modal').style.display = 'none';
+  }
+
+  function submitModify() {
+    const orderId = document.getElementById('modify-order-id').value;
+    const qty = parseInt(document.getElementById('modify-qty').value) || 0;
+    const disclosed = parseInt(document.getElementById('modify-disclosed').value) || 0;
+    const price = document.getElementById('modify-price').value;
+    if (qty <= 0 || disclosed <= 0) { alert('Quantity and disclosed must be positive integers.'); return; }
+    if (disclosed < qty * 0.1) { alert('Disclosed must be at least 10% of quantity.'); return; }
+    if (disclosed > qty) { alert('Disclosed cannot exceed quantity.'); return; }
+    fetch(TRADER_ENDPOINTS.modify, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-      body: JSON.stringify({ order_id: orderId })
+      body: JSON.stringify({ order_id: orderId, quantity: qty, disclosed_quantity: disclosed, price: price })
     })
     .then(res => res.json())
     .then(data => {
-      if (data.success) {
-        const row = document.getElementById('stoploss-' + orderId);
-        if (row) row.remove();
-      } else alert(data.message || "Failed to cancel stop order");
+      alert(data.message || (data.success ? 'Updated' : 'Failed'));
+      if (data.success) window.location.reload();
     }).catch(err => console.error(err));
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     setupTraderChartInteractions();
-    updatePriceEstimate();
     updateMarketPulse();
     setInterval(updateMarketPulse, 5000);
   });

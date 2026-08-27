@@ -596,18 +596,10 @@
     //   });
     // }
 
-    if (data.trades) {
-      const tradesTable = document.querySelector("#trades tbody");
-      tradesTable.innerHTML = "";
-      data.trades.forEach(trade => {
-        tradesTable.innerHTML += `
-          <tr>
-            ${IS_ADMIN ? `<td>${trade.buyer__user_id ?? '-'}</td><td>${trade.seller__user_id ?? '-'}</td>` : ''}
-            <td>${trade.price}</td>
-            <td>${trade.quantity}</td>
-            <td>${toIST(trade.timestamp) || '-'}</td>
-          </tr>`;
-      });
+    // Trades changed: re-fetch from the authorized endpoint so buyer/seller are
+    // shown to admins only (the broadcast payload deliberately omits identities).
+    if (data.trades || data.trades_updated) {
+      updateRecentTrades();
     }
   };
 

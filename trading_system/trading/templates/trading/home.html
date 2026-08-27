@@ -610,7 +610,7 @@ function checkOrderMode() {
     row.style.opacity = '0.5';
     row.style.transform = 'translateX(30px)';
   
-    fetch("{% url 'cancel_stoploss_order' %}", {
+    fetch("#", {  /* stop-loss feature removed; endpoint no longer exists */
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

@@ -64,9 +64,10 @@ urlpatterns = [
 
     # Cancel
     path('market-maker/cancel/', views.cancel_order, name='mm_cancel'),
-    path('market-maker/cancel-stoploss/', views.cancel_stoploss_order, name='mm_cancel_stoploss'),
     path('cancel_order/', views.cancel_order, name='cancel_order'),
-    path('cancel_stoploss_order/', views.cancel_stoploss_order, name='cancel_stoploss_order'),
+
+    # Participant order modification (own unmatched orders)
+    path('modify_my_order/', views.modify_order, name='modify_my_order'),
 
     # Shared utilities
     path('clear/', views.clear_database, name='clear_database'),
