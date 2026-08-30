@@ -18,9 +18,9 @@ import io
 from django.contrib import messages
 from .forms import UserRegisterForm
 from .utils import broadcast_orderbook_update
-from django.contrib.auth import logout as auth_logout, authenticate, login as auth_login
+from django.contrib.auth import logout as auth_logout, authenticate, login as auth_login, update_session_auth_hash
 from .utils import match_order
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import get_user_model
 
 logger = logging.getLogger(__name__)
@@ -673,6 +673,22 @@ def clear_database(request):
     return redirect('login')
 
 
+def reset_everything(request):
+    """Admin hard reset: wipe the order book, all trades, AND every participant
+    account (traders + market makers). Admin accounts are preserved."""
+    if not _is_admin(request.user):
+        return redirect('role_router')
+    Order.objects.all().delete()
+    Trade.objects.all().delete()
+    non_admin = BaseUser.objects.exclude(is_superuser=True).exclude(role='ADMIN')
+    usernames = list(non_admin.values_list('username', flat=True))
+    count = non_admin.count()
+    non_admin.delete()  # FK CASCADE clears any remaining orders/trades for these users
+    User.objects.filter(username__in=usernames).exclude(is_superuser=True).delete()
+    messages.success(request, f'Full reset done: order book and trades cleared, and {count} participant account(s) removed. Admin accounts were preserved.')
+    return redirect('admin_home')
+
+
 @login_required
 def get_buy_orders(request):
     if request.method == 'GET':
@@ -739,16 +755,16 @@ def cancel_order(request):
 # BULK USER UPLOAD
 # ============================================================
 
-REQUIRED_HEADERS = ['Roll', 'Name', 'Mail', 'Role', 'Password']
+REQUIRED_HEADERS = ['Registration No', 'Name', 'Mail', 'Role', 'Password']
 VALID_ROLES = {'TRADER', 'MARKET_MAKER'}
 
 
 def _validate_csv_row(row_num, roll, username, mail, role, password):
     errors = []
     if not roll:
-        errors.append('Roll is empty.')
+        errors.append('Registration No is empty.')
     elif not roll.isdigit():
-        errors.append(f'Roll "{roll}" must contain numbers only.')
+        errors.append(f'Registration No "{roll}" must contain numbers only.')
 
     if not username:
         errors.append('Username is empty.')
@@ -808,6 +824,65 @@ def register(request):
 
 
 @login_required
+def export_positions_csv(request):
+    """Admin: download the participant positions report (cash / inventory / P&L) as CSV."""
+    if not _is_admin(request.user):
+        return redirect('role_router')
+    participants, mark = _participant_positions()
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="participant_positions.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['Registration No', 'Name', 'Role', 'Cash', 'Inventory',
+                     'Equity', 'P&L', 'Mark Price'])
+    for p in participants:
+        writer.writerow([
+            p['user_id'], p['name'], p['role'],
+            f"{p['capital']:.2f}", p['inventory'],
+            f"{p['equity']:.2f}", f"{p['pnl']:.2f}",
+            f"{mark:.2f}" if mark is not None else '',
+        ])
+    return response
+
+
+def admin_account(request):
+    """Admin: change own login Registration No and/or password."""
+    if not _is_admin(request.user):
+        return redirect('role_router')
+    if request.method == 'POST':
+        new_id = (request.POST.get('new_user_id') or '').strip()
+        new_pw = request.POST.get('new_password') or ''
+        confirm = request.POST.get('confirm_password') or ''
+        user = request.user
+        changed = []
+        if new_id and new_id != user.user_id:
+            clash = (BaseUser.objects.filter(user_id=new_id).exclude(pk=user.pk).exists()
+                     or BaseUser.objects.filter(username=new_id).exclude(pk=user.pk).exists())
+            if clash:
+                messages.error(request, f'Registration No "{new_id}" is already taken.')
+                return redirect('admin_account')
+            user.user_id = new_id
+            user.username = new_id
+            changed.append('Registration No')
+        if new_pw:
+            if new_pw != confirm:
+                messages.error(request, 'Passwords do not match.')
+                return redirect('admin_account')
+            if len(new_pw) < 6:
+                messages.error(request, 'Password must be at least 6 characters.')
+                return redirect('admin_account')
+            user.set_password(new_pw)
+            changed.append('password')
+        if changed:
+            user.save()
+            if 'password' in changed:
+                update_session_auth_hash(request, user)
+            messages.success(request, 'Updated ' + ' and '.join(changed) + '.')
+        else:
+            messages.info(request, 'No changes were made.')
+        return redirect('admin_account')
+    return render(request, 'trading/account.html', {'base_role': 'ADMIN'})
+
+
 def bulk_user_upload(request):
     if not _is_admin(request.user):
         return redirect('role_router')
@@ -842,7 +917,7 @@ def bulk_user_upload(request):
         invalid_rows = []
 
         for row_num, row in enumerate(reader, start=2):
-            roll = (row.get('Roll') or '').strip()
+            roll = (row.get('Registration No') or '').strip()
             name = (row.get('Name') or '').strip()
             mail = (row.get('Mail') or '').strip()
             role = (row.get('Role') or '').strip()
@@ -854,7 +929,7 @@ def bulk_user_upload(request):
                 continue
 
             if BaseUser.objects.filter(user_id=roll).exists():
-                skipped_users.append({'row': row_num, 'Name': name, 'reason': f'Roll {roll} already exists.'})
+                skipped_users.append({'row': row_num, 'Name': name, 'reason': f'Registration No {roll} already exists.'})
                 continue
 
             try:
@@ -906,7 +981,7 @@ def bulk_user_delete(request):
             return render(request, 'trading/bulk_delete.html', {'results': results})
 
         reader = csv.DictReader(io.StringIO(decoded))
-        DELETE_HEADERS = ['Roll', 'Name']
+        DELETE_HEADERS = ['Registration No', 'Name']
         if not reader.fieldnames or [h.strip() for h in reader.fieldnames[:2]] != DELETE_HEADERS:
             messages.error(request, f'Invalid headers. First two columns must be: {", ".join(DELETE_HEADERS)}')
             return render(request, 'trading/bulk_delete.html', {'results': results})
@@ -916,15 +991,15 @@ def bulk_user_delete(request):
         error_rows = []
 
         for row_num, row in enumerate(reader, start=2):
-            roll = (row.get('Roll') or '').strip()
+            roll = (row.get('Registration No') or '').strip()
             name = (row.get('Name') or '').strip()
             display_name = name if name else roll
 
             if not roll:
-                error_rows.append({'row': row_num, 'name': display_name or '—', 'reason': 'Roll number is empty.'})
+                error_rows.append({'row': row_num, 'name': display_name or '—', 'reason': 'Registration No is empty.'})
                 continue
             if not roll.isdigit():
-                error_rows.append({'row': row_num, 'name': display_name, 'reason': f'Roll "{roll}" must be numbers only.'})
+                error_rows.append({'row': row_num, 'name': display_name, 'reason': f'Registration No "{roll}" must be numbers only.'})
                 continue
 
             try:

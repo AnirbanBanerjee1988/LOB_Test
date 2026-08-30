@@ -4,7 +4,7 @@ from trading.models import BaseUser
 
 
 class UserRegisterForm(UserCreationForm):
-    user_id = forms.CharField(max_length=100, required=True, label="User ID")
+    user_id = forms.CharField(max_length=100, required=True, label="Registration No")
     name = forms.CharField(max_length=150, required=True, label="Name")
     email = forms.EmailField(required=True)
     role = forms.ChoiceField(

@@ -31,6 +31,9 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
     path('role_router/', views.role_router, name='role_router'),
     path('admin_home/', views.admin_home, name='admin_home'),
+    path('admin-positions.csv', views.export_positions_csv, name='export_positions_csv'),
+    path('admin-account/', views.admin_account, name='admin_account'),
+    path('reset_everything/', views.reset_everything, name='reset_everything'),
 
     # =========================
     # ADMIN - Bulk Operations

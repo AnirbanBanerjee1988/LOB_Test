@@ -109,6 +109,7 @@
     <div class="card welcome-card">
       <h1>Welcome, {{ request.user.username }}!</h1>
       <p class="muted">Your trading dashboard is ready. Execute system operations with precision and speed.</p>
+      <a href="{% url 'admin_account' %}" class="btn" style="display:inline-block;margin-top:8px;">⚙ Account settings (change login / password)</a>
     </div>
 
     <div class="admin-top-grid">
@@ -171,6 +172,8 @@
         <div class="admin-links">
           <a class="btn" href="{% url 'password_reset' %}">Reset Password</a>
           <a class="btn btn-danger" href="{% url 'clear_database' %}">Clear Orderbook</a>
+          <a class="btn btn-danger" href="{% url 'reset_everything' %}" style="background:#7f1d1d;"
+             onclick="return confirm('RESET EVERYTHING? This clears the order book and all trades AND deletes every trader and market maker account (admins are kept). This cannot be undone.');">Reset Everything</a>
         </div>
         <p class="small-note">Use destructive operations carefully; clear orderbook removes all orders and trades.</p>
       </div>
@@ -216,13 +219,16 @@
 <div class="row" style="margin-top:18px;">
   <div class="col">
     <div class="card">
-      <h3>Participant Positions</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <h3 style="margin:0;">Participant Positions</h3>
+        <a href="{% url 'export_positions_csv' %}" class="btn" style="white-space:nowrap;">⬇ Download CSV</a>
+      </div>
       <p class="small-note">Cash and inventory for every participant. Equity and P&amp;L are marked to the last traded price{% if mark_price %} (₹{{ mark_price|floatformat:2 }}){% endif %}. P&amp;L = change in cash + change in inventory × mark.</p>
       <div style="overflow:auto;">
         <table style="width:100%;border-collapse:collapse;">
           <thead>
             <tr>
-              <th style="text-align:left;padding:8px;color:var(--muted)">Roll</th>
+              <th style="text-align:left;padding:8px;color:var(--muted)">Registration No</th>
               <th style="text-align:left;padding:8px;color:var(--muted)">Name</th>
               <th style="text-align:left;padding:8px;color:var(--muted)">Role</th>
               <th style="text-align:right;padding:8px;color:var(--muted)">Cash</th>

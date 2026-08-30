@@ -7,7 +7,7 @@ from decimal import Decimal
 class CustomUserManager(BaseUserManager):
     def create_user(self, user_id, email=None, password=None, **extra_fields):
         if not user_id:
-            raise ValueError("The User ID field must be set")
+            raise ValueError("The Registration No field must be set")
         email = self.normalize_email(email)
         extra_fields.setdefault('username', user_id)
         user = self.model(user_id=user_id, email=email, **extra_fields)

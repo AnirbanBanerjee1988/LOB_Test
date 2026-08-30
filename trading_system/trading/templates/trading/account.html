@@ -1,0 +1,47 @@
+{% extends 'trading/base.html' %}
+{% block title %}Admin Account{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col">
+    <div class="card" style="max-width:520px;margin:24px auto;">
+      <h3 style="margin-top:0;">Admin Account Settings</h3>
+      <p class="muted">Change the Registration No you log in with and/or set a new password. Leave a field blank to keep it unchanged.</p>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert" style="padding:10px 12px;border-radius:8px;margin-bottom:12px;
+               background:{% if message.tags == 'error' %}#7f1d1d{% elif message.tags == 'success' %}#14532d{% else %}#1f2937{% endif %};color:#fff;">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      <form method="POST" action="{% url 'admin_account' %}">
+        {% csrf_token %}
+
+        <div class="form-group" style="margin-bottom:14px;">
+          <label for="new_user_id">Registration No (login)</label>
+          <input type="text" class="form-control" id="new_user_id" name="new_user_id"
+                 value="{{ request.user.user_id }}" autocomplete="off">
+        </div>
+
+        <div class="form-group" style="margin-bottom:14px;">
+          <label for="new_password">New password</label>
+          <input type="password" class="form-control" id="new_password" name="new_password"
+                 placeholder="Leave blank to keep current" autocomplete="new-password">
+        </div>
+
+        <div class="form-group" style="margin-bottom:18px;">
+          <label for="confirm_password">Confirm new password</label>
+          <input type="password" class="form-control" id="confirm_password" name="confirm_password"
+                 placeholder="Repeat new password" autocomplete="new-password">
+        </div>
+
+        <button type="submit" class="btn-action">Save changes</button>
+        <a href="{% url 'admin_home' %}" class="btn btn-secondary" style="margin-left:8px;">Back to dashboard</a>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
