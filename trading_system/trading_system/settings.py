@@ -33,6 +33,16 @@ DEBUG = os.environ.get('DEBUG', '0') == '1'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
+# --- Reverse-proxy / HTTPS settings (Railway) ---
+# The app runs behind Railway's TLS-terminating edge proxy. Trust the forwarded
+# protocol header so Django recognizes HTTPS requests (required for CSRF on the
+# login POST), and never perform an app-level HTTP->HTTPS redirect: the edge
+# already handles TLS, and an app redirect makes the platform health check on
+# '/' receive a 3xx and fail.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = False
+USE_X_FORWARDED_HOST = True
+
 # Application definition
 
 INSTALLED_APPS = [
